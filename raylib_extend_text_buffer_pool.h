@@ -45,6 +45,12 @@ void text_buffer_pool_destroy(struct TextBufferPool* pool);
 struct TextData* text_buffer_pool_put(struct TextBufferPool* pool, const char* text, int fontSize);
 
 /*
+    get data handle by the given text.
+    if not found, return NULL.
+*/
+struct TextData* text_buffer_pool_get(struct TextBufferPool* pool, const char* text);
+
+/*
     delete one text data by the given name.
 */
 void text_buffer_pool_del(struct TextBufferPool* pool, const char* text);
