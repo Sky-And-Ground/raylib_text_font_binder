@@ -3,14 +3,27 @@
 #include <stdlib.h>
 #include <string.h>
 
-static void text_data_init(struct TextBufferPool* pool, struct TextData* data, const char* text, int fontSize) {
+static int text_data_init(struct TextBufferPool* pool, struct TextData* data, const char* text, int rebuildText, int fontSize) {
     int codepointsCount;
     int* codepoints;
 
-    data->text = text;
+    if (rebuildText) {
+        data->text = strdup(text);
+        if (data->text == NULL) {
+            return 0;
+        }
+    }
+
     codepoints = LoadCodepoints(text, &codepointsCount);
     data->font = LoadFontFromMemory(".ttf", pool->fontFileData, pool->fileDataSize, fontSize, codepoints, codepointsCount);
     UnloadCodepoints(codepoints);
+    return 1;
+}
+
+static void text_data_destroy(struct TextData* data) {
+    UnloadFont(data->font);
+    free(data->text);
+    free(data);
 }
 
 static unsigned int text_buffer_pool_hash(struct TextBufferPool* pool, const char* key) {
@@ -50,10 +63,7 @@ void text_buffer_pool_destroy(struct TextBufferPool* pool) {
 
         while (cursor) {
             tmp = cursor->next;
-
-            UnloadFont(cursor->font);
-            free(cursor);
-
+            text_data_destroy(cursor);
             cursor = tmp;
         }
     }
@@ -82,7 +92,7 @@ struct TextData* text_buffer_pool_put(struct TextBufferPool* pool, const char* t
     /* if exists, then update it. */
     if (node) {
         UnloadFont(node->font);
-        text_data_init(pool, node, text, fontSize);
+        text_data_init(pool, node, text, 0, fontSize);
         return node;
     }
     else {
@@ -93,7 +103,11 @@ struct TextData* text_buffer_pool_put(struct TextBufferPool* pool, const char* t
         }
         else {
             unsigned int hashval = text_buffer_pool_hash(pool, text);
-            text_data_init(pool, node, text, fontSize);
+            
+            if (!text_data_init(pool, node, text, 1, fontSize)) {
+                free(node);
+                return NULL;
+            }
             
             if (pool->bucket[hashval] == NULL) {
                 pool->bucket[hashval] = node;
@@ -118,7 +132,7 @@ void text_buffer_pool_del(struct TextBufferPool* pool, const char* text) {
         if (strcmp(text, cursor->text) == 0) {
             if (cursor == pool->bucket[hashval]) {
                 struct TextData* tmp = cursor->next;
-                free(cursor);
+                text_data_destroy(cursor);
                 pool->bucket[hashval] = tmp;
             }
             else {
