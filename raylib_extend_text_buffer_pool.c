@@ -61,7 +61,7 @@ void text_buffer_pool_destroy(struct TextBufferPool* pool) {
     UnloadFileData(pool->fontFileData);
 }
 
-static struct TextData* text_buffer_pool_find_node(struct TextBufferPool* pool, const char* text) {
+struct TextData* text_buffer_pool_get(struct TextBufferPool* pool, const char* text) {
     unsigned int hashval = text_buffer_pool_hash(pool, text);
     struct TextData* cursor = pool->bucket[hashval];
     
@@ -77,7 +77,7 @@ static struct TextData* text_buffer_pool_find_node(struct TextBufferPool* pool, 
 }
 
 struct TextData* text_buffer_pool_put(struct TextBufferPool* pool, const char* text, int fontSize) {
-    struct TextData* node = text_buffer_pool_find_node(pool, text);
+    struct TextData* node = text_buffer_pool_get(pool, text);
 
     /* if exists, then update it. */
     if (node) {
