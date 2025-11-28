@@ -1,2 +1,2 @@
 # raylib_extend_text_buffer_pool
-a extend library, to solve the Chinese characters shown problems, for raylib.
+##### a extend library, to solve the Chinese characters shown problems, for raylib. it's very simple, and easy to integrate.
