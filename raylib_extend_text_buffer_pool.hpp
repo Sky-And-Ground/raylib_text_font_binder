@@ -7,9 +7,6 @@
 #include <string>
 #include <stdexcept>
 #include <filesystem>
-#include <memory>
-#include <string_view>
-#include <unordered_map>
 #include <utility>
 #include <raylib.h>
 
@@ -21,97 +18,165 @@ namespace raylib_extend {
         {}
     };
 
-    struct TextData {
-        std::string text;
-        Font font;
-        int fontSize;
-    };
-
-    class TextPool {
-        unsigned char* fontFileData;
+    // a wrapper for raylib font file data.
+    class FontFileData {
+        unsigned char* data;
         int dataSize;
-        std::unordered_map<std::string_view, std::shared_ptr<TextData>> pool;
-
-        void init_font(Font& font, int fontSize, std::string_view text) {
-            int codepointsCount;
-            int* codepoints = LoadCodepoints(text.data(), &codepointsCount);
-            font = LoadFontFromMemory(".ttf", fontFileData, dataSize, fontSize, codepoints, codepointsCount);
-            UnloadCodepoints(codepoints);
-        }
-
-        TextPool() 
-            : fontFileData{ nullptr }, dataSize{ 0 }, pool{}
-        {}
     public:
-        static TextPool& instance() {
-            static TextPool pool;
-            return pool;
+        FontFileData() : data{ nullptr }, dataSize{ 0 } {}
+
+        FontFileData(const std::string& fontPath) : data { nullptr }, dataSize{ 0 } {
+            reset(fontPath);
         }
 
-        ~TextPool() {
-            for (auto& [k, v] : pool) {
-                UnloadFont(v->font);
-            }
-
-            if (fontFileData) {
-                UnloadFileData(fontFileData);
+        ~FontFileData() {
+            if (data) {
+                UnloadFileData(data);
             }
         }
 
-        TextPool(const TextPool&) = delete;
-        TextPool& operator=(const TextPool&) = delete;
-        TextPool(TextPool&& other) = delete;
-        TextPool& operator=(TextPool&& other) = delete;
+        FontFileData(const FontFileData&) = delete;
+        FontFileData& operator=(const FontFileData&) = delete;
 
-        void load_font(const std::string& fontPath) {
+        FontFileData(FontFileData&& other) noexcept 
+            : data{ std::exchange(other.data, nullptr) }, dataSize{ std::exchange(other.dataSize, 0) } 
+        {}
+
+        FontFileData& operator=(FontFileData&& other) noexcept {
+            if (this != &other) {
+                if (data) {
+                    UnloadFileData(data);
+                }
+                
+                data = std::exchange(other.data, nullptr);
+                dataSize = std::exchange(other.dataSize, 0);
+            }
+
+            return *this;
+        }
+
+        void reset(const std::string& fontPath) {
             if (!std::filesystem::exists(fontPath)) {
                 throw FontNotFoundException{ fontPath };
             }
 
-            if (fontFileData) {
-                UnloadFileData(fontFileData);
+            if (data) {
+                UnloadFileData(data);
             }
 
-            fontFileData = LoadFileData(fontPath.c_str(), &dataSize);
+            data = LoadFileData(fontPath.c_str(), &dataSize);
         }
 
-        void put(std::string_view text, int fontSize) {
-            auto iter = pool.find(text);
+        const unsigned char* get_data() const noexcept { 
+            return data; 
+        }
 
-            if (iter != pool.cend()) {
-                if (iter->second->fontSize != fontSize) {
-                    iter->second->fontSize = fontSize;
-                    UnloadFont(iter->second->font);
-                    init_font(iter->second->font, fontSize, text);
+        int get_data_size() const noexcept { 
+            return dataSize; 
+        }
+    };
+
+    // a wrapper for raylib codepints.
+    class CodePoints {
+        int* cp;
+        int cpCount;
+    public:
+        CodePoints(const std::string& text) : cp{ nullptr }, cpCount{ 0 } {
+            cp = LoadCodepoints(text.data(), &cpCount);
+        }
+
+        ~CodePoints() {
+            if (cp) {
+                UnloadCodepoints(cp);
+            }
+        }
+
+        CodePoints(const CodePoints&) = delete;
+        CodePoints& operator=(const CodePoints&) = delete;
+
+        CodePoints(CodePoints&& other) noexcept 
+            : cp{ std::exchange(other.cp, nullptr) }, cpCount{ std::exchange(other.cpCount, 0) } 
+        {}
+
+        CodePoints& operator=(CodePoints&& other) noexcept {
+            if (this != &other) {
+                if (cp) {
+                    UnloadCodepoints(cp);
                 }
-            }
-            else {
-                auto td = std::make_shared<TextData>();
-                td->fontSize = fontSize;
-                td->text = text;
-                init_font(td->font, fontSize, text);
-
-                pool.emplace(td->text, td);
+                
+                cp = std::exchange(other.cp, nullptr);
+                cpCount = std::exchange(other.cpCount, 0);
             }
 
-            // never return the iterator to the caller, because rehash may happens.
+            return *this;
         }
 
-        const std::shared_ptr<TextData> get(std::string_view text) {
-            auto iter = pool.find(text);
-            return iter != pool.cend() ? iter->second : nullptr;
+        int* get_data() const noexcept {
+            return cp;
         }
 
-        void del(std::string_view text) {
-            pool.erase(text);
+        int get_count() const noexcept {
+            return cpCount;
+        }
+    };
+
+    class TextData {
+        std::string _text;
+        Font _font;
+        int _fontSize;
+        bool loaded;
+    public:
+        TextData(const std::string& text, const FontFileData& ffd, int fontSize) {
+            reset(text, ffd, fontSize);
+            loaded = true;
         }
 
-        const std::unordered_map<std::string_view, std::shared_ptr<TextData>>& seek_pool() const noexcept {
-            return pool;
+        ~TextData() {
+            if (loaded) {
+                UnloadFont(_font);
+            }
         }
 
-        const std::unordered_map<std::string_view, std::shared_ptr<TextData>>::size_type size() const noexcept {
-            return pool.size();
+        TextData(const TextData&) = delete;
+        TextData& operator=(const TextData&) = delete;
+
+        TextData(TextData&& other) noexcept
+            : _text{ std::exchange(other._text, "") }, _font{ std::exchange(other._font, {}) }, _fontSize{ std::exchange(other._fontSize, 0) }, loaded{ std::exchange(other.loaded, false) }
+        {}
+
+        TextData& operator=(TextData&& other) noexcept {
+            if (this != &other) {
+                if (loaded) {
+                    UnloadFont(_font);
+                }
+
+                _text = std::exchange(other._text, "");
+                _font = std::exchange(other._font, {});
+                _fontSize = std::exchange(other._fontSize, 0);
+                loaded = std::exchange(other.loaded, false);
+            }
+
+            return *this;
+        }
+
+        void reset(const std::string& text, const FontFileData& ffd, int fontSize) {
+            _text = text;
+            _fontSize = fontSize;
+
+            CodePoints cp{ _text };
+            _font = LoadFontFromMemory(".ttf", ffd.get_data(), ffd.get_data_size(), _fontSize, cp.get_data(), cp.get_count());
+        }
+
+        const std::string& text() const noexcept {
+            return _text;
+        }
+
+        const Font& font() const noexcept {
+            return _font;
+        }
+
+        int font_size() const noexcept {
+            return _fontSize;
         }
     };
 }
