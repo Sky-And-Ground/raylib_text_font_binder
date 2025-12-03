@@ -7,6 +7,7 @@
 #include <string>
 #include <stdexcept>
 #include <filesystem>
+#include <memory>
 #include <utility>
 #include <raylib.h>
 
@@ -18,41 +19,40 @@ namespace raylib_extend {
         {}
     };
 
-    // a wrapper for raylib font file data.
-    class FontFileData {
-        unsigned char* data;
-        int dataSize;
-    public:
-        FontFileData() : data{ nullptr }, dataSize{ 0 } {}
-
-        FontFileData(const std::string& fontPath) : data { nullptr }, dataSize{ 0 } {
-            reset(fontPath);
-        }
-
-        ~FontFileData() {
-            if (data) {
-                UnloadFileData(data);
-            }
-        }
-
-        FontFileData(const FontFileData&) = delete;
-        FontFileData& operator=(const FontFileData&) = delete;
-
-        FontFileData(FontFileData&& other) noexcept 
-            : data{ std::exchange(other.data, nullptr) }, dataSize{ std::exchange(other.dataSize, 0) } 
-        {}
-
-        FontFileData& operator=(FontFileData&& other) noexcept {
-            if (this != &other) {
+    namespace detail {
+        struct FontFileDataDeleter {
+            void operator()(unsigned char* data) const noexcept {
                 if (data) {
                     UnloadFileData(data);
                 }
-                
-                data = std::exchange(other.data, nullptr);
-                dataSize = std::exchange(other.dataSize, 0);
             }
+        };
 
-            return *this;
+        struct CodepointsDeleter {
+            void operator()(int* codepoints) const noexcept {
+                if (codepoints) {
+                    UnloadCodepoints(codepoints);
+                }
+            }
+        };
+
+        struct FontDeleter {
+            void operator()(Font* font) const noexcept {
+                if (font && font->texture.id != 0) {
+                    UnloadFont(*font);
+                }
+            }
+        };
+    }
+
+    // a wrapper for raylib font file data.
+    class FontFileData {
+        std::unique_ptr<unsigned char[], detail::FontFileDataDeleter> data;
+        int dataSize;
+    public:
+        FontFileData(const std::string& fontPath) : data{ nullptr }, dataSize{ 0 } 
+        {
+            reset(fontPath);
         }
 
         void reset(const std::string& fontPath) {
@@ -60,15 +60,12 @@ namespace raylib_extend {
                 throw FontNotFoundException{ fontPath };
             }
 
-            if (data) {
-                UnloadFileData(data);
-            }
-
-            data = LoadFileData(fontPath.c_str(), &dataSize);
+            unsigned char* newData = LoadFileData(fontPath.c_str(), &dataSize);
+            data.reset(newData);
         }
 
         const unsigned char* get_data() const noexcept { 
-            return data; 
+            return data.get();
         }
 
         int get_data_size() const noexcept { 
@@ -78,41 +75,17 @@ namespace raylib_extend {
 
     // a wrapper for raylib codepints.
     class CodePoints {
-        int* cp;
+        std::unique_ptr<int[], detail::CodepointsDeleter> cp;
         int cpCount;
     public:
-        CodePoints(const std::string& text) : cp{ nullptr }, cpCount{ 0 } {
-            cp = LoadCodepoints(text.data(), &cpCount);
-        }
-
-        ~CodePoints() {
-            if (cp) {
-                UnloadCodepoints(cp);
-            }
-        }
-
-        CodePoints(const CodePoints&) = delete;
-        CodePoints& operator=(const CodePoints&) = delete;
-
-        CodePoints(CodePoints&& other) noexcept 
-            : cp{ std::exchange(other.cp, nullptr) }, cpCount{ std::exchange(other.cpCount, 0) } 
-        {}
-
-        CodePoints& operator=(CodePoints&& other) noexcept {
-            if (this != &other) {
-                if (cp) {
-                    UnloadCodepoints(cp);
-                }
-                
-                cp = std::exchange(other.cp, nullptr);
-                cpCount = std::exchange(other.cpCount, 0);
-            }
-
-            return *this;
+        CodePoints(const std::string& text) : cp{ nullptr }, cpCount{ 0 }
+        {
+            int* tmpCp = LoadCodepoints(text.data(), &cpCount);
+            cp.reset(tmpCp);
         }
 
         int* get_data() const noexcept {
-            return cp;
+            return cp.get();
         }
 
         int get_count() const noexcept {
@@ -122,41 +95,13 @@ namespace raylib_extend {
 
     class TextData {
         std::string _text;
-        Font _font;
+        std::unique_ptr<Font, detail::FontDeleter> _font;
         int _fontSize;
-        bool loaded;
     public:
-        TextData(const std::string& text, const FontFileData& ffd, int fontSize) {
+        TextData(const std::string& text, const FontFileData& ffd, int fontSize) 
+            : _text{ "" }, _font{ nullptr }, _fontSize{ 0 }
+        {
             reset(text, ffd, fontSize);
-            loaded = true;
-        }
-
-        ~TextData() {
-            if (loaded) {
-                UnloadFont(_font);
-            }
-        }
-
-        TextData(const TextData&) = delete;
-        TextData& operator=(const TextData&) = delete;
-
-        TextData(TextData&& other) noexcept
-            : _text{ std::exchange(other._text, "") }, _font{ std::exchange(other._font, {}) }, _fontSize{ std::exchange(other._fontSize, 0) }, loaded{ std::exchange(other.loaded, false) }
-        {}
-
-        TextData& operator=(TextData&& other) noexcept {
-            if (this != &other) {
-                if (loaded) {
-                    UnloadFont(_font);
-                }
-
-                _text = std::exchange(other._text, "");
-                _font = std::exchange(other._font, {});
-                _fontSize = std::exchange(other._fontSize, 0);
-                loaded = std::exchange(other.loaded, false);
-            }
-
-            return *this;
         }
 
         void reset(const std::string& text, const FontFileData& ffd, int fontSize) {
@@ -164,15 +109,16 @@ namespace raylib_extend {
             _fontSize = fontSize;
 
             CodePoints cp{ _text };
-            _font = LoadFontFromMemory(".ttf", ffd.get_data(), ffd.get_data_size(), _fontSize, cp.get_data(), cp.get_count());
+            Font tmpFont = LoadFontFromMemory(".ttf", ffd.get_data(), ffd.get_data_size(), _fontSize, cp.get_data(), cp.get_count());
+            _font.reset(new Font{ tmpFont });
         }
 
         const std::string& text() const noexcept {
             return _text;
         }
 
-        const Font& font() const noexcept {
-            return _font;
+        const Font* font() const noexcept {
+            return _font.get();
         }
 
         int font_size() const noexcept {
