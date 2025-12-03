@@ -3,7 +3,6 @@
 
 using namespace raylib_extend;
 
-// g++ raylib_text_font_binder_test.cpp -I D:\third-party\raylib-5.5_win64_mingw-w64\raylib-5.5_win64_mingw-w64\include -L D:\third-party\raylib-5.5_win64_mingw-w64\raylib-5.5_win64_mingw-w64\lib -l raylib -lopengl32 -lgdi32 -lwinmm
 int main(void) 
 {
     FontFileData ffd{ "simkai.ttf" };
