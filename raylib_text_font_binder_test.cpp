@@ -10,13 +10,13 @@ int main(void)
     InitWindow(800, 450, "测试中文显示");
     SetTargetFPS(60);
 
-    TextData data{ "这是一段测试文本", ffd, 64 };  /* render our text. */
+    TextData data{ "纯是一段这文测试本的 ,", ffd };  // render our needed characters, be cautions here, we also include a space and a comma.
 
     while (!WindowShouldClose()) 
     {
         BeginDrawing();
         ClearBackground(WHITE);
-        DrawTextEx(*(data.font()), data.text().c_str(), (Vector2){ 50, 50 }, data.font_size(), 20, RED);  /* draw it. */
+        DrawTextEx(*(data.font()), "这是一段文本, 是的, 测试文本", (Vector2){ 50, 50 }, 32, 0, RED);  /* draw it. */
         EndDrawing();
     }
 
