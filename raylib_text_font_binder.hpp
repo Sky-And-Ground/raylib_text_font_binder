@@ -39,10 +39,7 @@ namespace raylib_extend {
         struct FontDeleter {
             void operator()(Font* font) const noexcept {
                 if (font) {
-                    if (font->texture.id != 0) {
-                        UnloadFont(*font);
-                    } 
-
+                    UnloadFont(*font);
                     delete font;
                 }
             }
@@ -98,35 +95,30 @@ namespace raylib_extend {
     };
 
     class TextData {
-        std::string _text;
+        std::string _characters;
         std::unique_ptr<Font, detail::FontDeleter> _font;
         int _fontSize;
     public:
-        TextData(const std::string& text, const FontFileData& ffd, int fontSize) 
-            : _text{ "" }, _font{ nullptr }, _fontSize{ 0 }
+        TextData(const std::string& characters, const FontFileData& ffd) 
+            : _characters{ "" }, _font{ nullptr }, _fontSize{ 32 }
         {
-            reset(text, ffd, fontSize);
+            reset(characters, ffd);
         }
 
-        void reset(const std::string& text, const FontFileData& ffd, int fontSize) {
-            _text = text;
-            _fontSize = fontSize;
+        void reset(const std::string& characters, const FontFileData& ffd) {
+            _characters = characters;
 
-            CodePoints cp{ _text };
+            CodePoints cp{ _characters };
             Font tmpFont = LoadFontFromMemory(".ttf", ffd.get_data(), ffd.get_data_size(), _fontSize, cp.get_data(), cp.get_count());
             _font.reset(new Font{ tmpFont });
         }
 
-        const std::string& text() const noexcept {
-            return _text;
+        const std::string& characters() const noexcept {
+            return _characters;
         }
 
         const Font* font() const noexcept {
             return _font.get();
-        }
-
-        int font_size() const noexcept {
-            return _fontSize;
         }
     };
 }
