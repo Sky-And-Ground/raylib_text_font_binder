@@ -7,6 +7,7 @@
 #include <string>
 #include <stdexcept>
 #include <filesystem>
+#include <optional>
 #include <memory>
 #include <utility>
 #include <cstdint>
@@ -159,21 +160,21 @@ namespace raylib_extend {
                 }
                 else if ((byte & 0xf8) == 0xf0) {
                     codepoint = ((byte & 0x07) << 18) |
-                                ((static_cast<uint8_t>(str[i + 1]) & 0x3F) << 12) |
-                                ((static_cast<uint8_t>(str[i + 2]) & 0x3F) << 6) |
-                                (static_cast<uint8_t>(str[i + 3]) & 0x3F);
+                                ((static_cast<uint8_t>(str[i + 1]) & 0x3f) << 12) |
+                                ((static_cast<uint8_t>(str[i + 2]) & 0x3f) << 6) |
+                                (static_cast<uint8_t>(str[i + 3]) & 0x3f);
                     i += 4;
                 }
                 else {   // invalid, just break.
                     break;
                 }
 
-                if (codepoint <= 0xFFFF) {
+                if (codepoint <= 0xffff) {
                     wstr += static_cast<wchar_t>(codepoint);
                 } else {
                     codepoint -= 0x10000;
-                    wstr += static_cast<wchar_t>((codepoint >> 10) + 0xD800);
-                    wstr += static_cast<wchar_t>((codepoint & 0x3FF) + 0xDC00);
+                    wstr += static_cast<wchar_t>((codepoint >> 10) + 0xd800);
+                    wstr += static_cast<wchar_t>((codepoint & 0x3ff) + 0xdc00);
                 }
             }
 
@@ -228,8 +229,13 @@ namespace raylib_extend {
             return _characters;
         }
 
-        const Font* font() const noexcept {
-            return _font.get();
+        std::optional<Font> font() const noexcept {
+            if (_font != nullptr) {
+                return *_font;
+            }
+            else {
+                return std::nullopt;
+            }
         }
     };
 }
